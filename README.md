@@ -1,4 +1,8 @@
 <html>
-Temp_fixed.cu -> modified_yolov5.cu
-remaining -> individual layers.  
+<p>
+  Temp_fixed.cu -> modified_yolov5.cu
+</p>
+  <p>
+  remaining -> individual layers. 
+</p> 
 </html>
