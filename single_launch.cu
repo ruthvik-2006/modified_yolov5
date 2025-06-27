@@ -39,7 +39,9 @@ __device__ float compute_convolution_element(const float* input, const float* we
 __device__ void Silu_forward_elementwise(const float* input, float* output, int total_elements) {
     long long index=blockIdx.x*blockDim.x+threadIdx.x;
     if(index>=total_elements) return;
-    float sigmoid_val=1.0f/(1.0f+expf(-input[index]));
+    float x = input[index];
+    x = fmaxf(fminf(x, 80.0f), -80.0f);  // Clamp input to prevent overflow (to prevent nan)
+    float sigmoid_val=1.0f/(1.0f+expf(-x));
     output[index]=sigmoid_val*input[index];
 }
 
@@ -67,7 +69,11 @@ __device__ void batchnorm2d_forward_elementwise(const float* input, float* outpu
     for (int h = 0; h < H; ++h) {
         for (int w = 0; w < W; ++w) {
             int idx = ((n * C + c) * H + h) * W + w;
-            float norm = (input[idx] - mean_val) / sqrtf(var_val + eps);
+            // float norm = (input[idx] - mean_val) / sqrtf(var_val + eps);
+            // output[idx] = norm * gamma_val + beta_val;
+            float denom = sqrtf(var_val + eps); //changed because of nan values
+            if (denom < 1e-8f || isnan(denom) || isinf(denom)) denom = 1.0f;
+            float norm = (input[idx] - mean_val) / denom;
             output[idx] = norm * gamma_val + beta_val;
         }
     }
@@ -75,7 +81,11 @@ __device__ void batchnorm2d_forward_elementwise(const float* input, float* outpu
 }
 
 __device__ float batchnorm2d_element(float val, float gamma, float beta, float mean, float var, float eps) {
-    return gamma * ((val - mean) / sqrtf(var + eps)) + beta;
+    // return gamma * ((val - mean) / sqrtf(var + eps)) + beta;
+    float denom = sqrtf(var + eps);
+    if (denom < 1e-8f || isnan(denom) || isinf(denom)) denom = 1.0f;
+    return gamma * ((val - mean) / denom) + beta;
+
 }
 
 __device__ float maxpool2d_element(const float* input,
@@ -322,7 +332,7 @@ __device__ void apply_sppf_block(const float* input_ptr, float* output_ptr,
 
 
 // ====================================================================
-// full_inference Global Kernel
+// full_inference Global Kernel (use global ---> (host to global) (global->device) (device->device) <--- use only these)
 // ====================================================================
 
 
@@ -1085,7 +1095,7 @@ __global__ void full_inference(float* input, float* output,
 
         printf("Sample of final output ****(after Layer 9 SPPF block) ***** from device full_inference:\n");
         // Only print a few elements to avoid excessive device-side printf, which is slow.
-        // This loop will run for *every* thread, so be mindful of output verbosity.
+        // This loop will run for *every* thread..
         int total_final_output_elements = N_batch * C_current * H_current * W_current;
         for (int i = 0; i < 10; ++i) {
             if (isnan(output[i])) {
@@ -1095,6 +1105,16 @@ __global__ void full_inference(float* input, float* output,
         }
         printf("\n");
     }
+
+    printf("Head processing started .... \n");
+
+
+
+
+
+
+
+
 }
 
 
